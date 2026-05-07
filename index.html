@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
- 
+
     <header>
         <nav>
             <div class="logo" id="secretLogo">
@@ -58,6 +58,7 @@
                     
                     <input type="text" id="prodName" placeholder="Nombre (Ej: Polo Oversize)">
                     <input type="number" id="prodPrice" placeholder="Precio (Ej: 45.00)" step="0.01">
+                    <input type="number" id="prodStock" placeholder="Stock (Ej: 10)" value="0">
                     
                     <!-- Categoría -->
                     <select id="prodCategoria">
@@ -82,12 +83,6 @@
                         <label><input type="checkbox" class="talla-check" value="L"> L</label>
                         <label><input type="checkbox" class="talla-check" value="XL"> XL</label>
                         <label><input type="checkbox" class="talla-check" value="XXL"> XXL</label>
-                    </div>
-                    
-                    <!-- Stock por talla y color (se muestra dinámicamente) -->
-                    <div id="stockFieldsContainer" style="display:none; margin-top:15px; border-top:2px solid #ddd; padding-top:15px;">
-                        <h4>Stock por Talla y Color</h4>
-                        <div id="stockFields"></div>
                     </div>
                     
                     <button class="btn-primary" id="saveBtn" onclick="saveProduct()">GUARDAR CAMBIOS</button>
@@ -116,13 +111,13 @@
 
                 <!-- COLORES -->
                 <div class="selector-section">
-                    <p class="selector-label">Color: <span id="colorSeleccionado">—</span></p>
+                    <p class="selector-label">🎨 Color: <span id="colorSeleccionado">—</span></p>
                     <div id="colorOptions" class="color-options"></div>
                 </div>
 
                 <!-- TALLAS -->
                 <div class="selector-section">
-                    <p class="selector-label">Talla: <span id="tallaSeleccionada">—</span></p>
+                    <p class="selector-label">📏 Talla: <span id="tallaSeleccionada">—</span></p>
                     <div id="tallaOptions" class="talla-options"></div>
                 </div>
 
@@ -131,7 +126,7 @@
                 </div>
 
                 <button class="btn-primary" id="btnAddCart" onclick="addToCartFromModal()">
-                    AÑADIR AL CARRITO
+                    🛒 AÑADIR AL CARRITO
                 </button>
             </div>
         </div>
