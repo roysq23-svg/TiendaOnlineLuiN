@@ -1,8 +1,8 @@
 // ==========================
 // CONFIGURACIÓN SUPABASE
 // ==========================
-const SUPABASE_URL = 'https://nbcxafnjolasdmleqjhp.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_tv_jnG1KLW1zmmEeCvENmQ_hKBsoLy4';
+const SUPABASE_URL = 'https://nbcxafnjolasdmleqjhp.supabase.co'; // <-- Reemplaza con tu URL real
+const SUPABASE_KEY = 'sb_publishable_0CmPrpHpz_iz8ZOI04uZ4A_VcNCpncN'; // <-- Reemplaza con tu Key real
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ==========================
@@ -14,6 +14,7 @@ let selectedColor = null;
 let selectedTalla = null;
 let selectedCantidad = 1;
 let maxCantidadDisponible = 0;
+let currentStockMap = {};
 
 // ==========================
 // FUNCIONES DE AYUDA
@@ -87,6 +88,7 @@ async function loadProducts() {
         const card = document.createElement('div');
         card.className = 'product-card';
         card.dataset.polo = encodeURIComponent(JSON.stringify(p));
+        card.dataset.categoria = p.categoria?.toLowerCase() || '';
         card.innerHTML = `
             <img src="${p.imagen_url || 'https://via.placeholder.com/300?text=Sin+imagen'}"
                  onerror="this.src='https://via.placeholder.com/300?text=Sin+imagen'"
@@ -233,7 +235,6 @@ async function saveProduct() {
     btn.innerText = "PROCESANDO...";
     btn.disabled = true;
 
-    // Recoger stock por variante
     const variantes = [];
     tallasChecked.forEach(talla => {
         colores.forEach(color => {
@@ -255,7 +256,6 @@ async function saveProduct() {
         colores: colores
     };
 
-    // Subir imagen si hay nueva
     if (file) {
         const fileName = `polo_${Date.now()}.png`;
         const { error: uploadError } = await _supabase.storage
@@ -293,11 +293,8 @@ async function saveProduct() {
         return;
     }
 
-    // Actualizar tabla polo_stock
     if (poloId) {
-        // Borrar variantes anteriores
         await _supabase.from('polo_stock').delete().eq('polo_id', poloId);
-        // Insertar nuevas
         const inserts = variantes.map(v => ({
             polo_id: poloId,
             talla: v.talla,
@@ -395,7 +392,6 @@ async function openModal(polo) {
     document.getElementById('cantidadValue').innerText = "1";
     document.getElementById('maxStock').innerText = "0";
 
-    // Cargar colores
     const colorOptions = document.getElementById('colorOptions');
     colorOptions.innerHTML = '';
     (polo.colores || []).forEach(color => {
@@ -412,30 +408,27 @@ async function openModal(polo) {
         colorOptions.appendChild(div);
     });
 
-    // Cargar tallas y sus stocks
     const tallaOptions = document.getElementById('tallaOptions');
     tallaOptions.innerHTML = '';
     const tallas = polo.tallas || [];
 
-    // Obtener stock real por variante desde polo_stock
     const { data: stockData } = await _supabase
         .from('polo_stock')
         .select('*')
         .eq('polo_id', polo.id);
 
-    const stockMap = {};
+    currentStockMap = {};
     if (stockData) {
         stockData.forEach(s => {
-            stockMap[`${s.talla}_${s.color}`] = s.cantidad;
+            currentStockMap[`${s.talla}_${s.color}`] = s.cantidad;
         });
     }
 
-    // Por ahora, para mostrar las tallas simplemente mostramos el botón
     tallas.forEach(talla => {
         const btn = document.createElement('button');
         btn.className = 'talla-btn';
         btn.innerText = talla;
-        btn.addEventListener('click', (e) => selectTalla(talla, stockMap, e));
+        btn.addEventListener('click', (e) => selectTalla(talla, e));
         tallaOptions.appendChild(btn);
     });
 
@@ -449,21 +442,33 @@ function selectColor(color, e) {
     document.querySelectorAll('.color-circle').forEach(c => c.classList.remove('selected'));
     if (e?.currentTarget) e.currentTarget.classList.add('selected');
 
-    // Verificar stock para la combinación actual
-    verificarStockCombinacion();
+    // Recalcular maxCantidadDisponible si ya hay talla seleccionada
+    if (selectedTalla && currentStockMap) {
+        const key = `${selectedTalla}_${selectedColor}`;
+        maxCantidadDisponible = currentStockMap[key] || 0;
+        document.getElementById('maxStock').innerText = maxCantidadDisponible;
+        selectedCantidad = 1;
+        document.getElementById('cantidadValue').innerText = "1";
+
+        if (maxCantidadDisponible <= 5 && maxCantidadDisponible > 0) {
+            document.getElementById('stockWarning').style.display = 'block';
+            document.getElementById('stockNum').innerText = maxCantidadDisponible;
+        } else {
+            document.getElementById('stockWarning').style.display = 'none';
+        }
+    }
 }
 
-function selectTalla(talla, stockMap, e) {
+function selectTalla(talla, e) {
     selectedTalla = talla;
     document.getElementById('tallaSeleccionada').innerText = talla;
 
     document.querySelectorAll('.talla-btn').forEach(b => b.classList.remove('selected'));
     if (e?.currentTarget) e.currentTarget.classList.add('selected');
 
-    // Obtener stock para la combinación seleccionada
-    if (selectedColor && stockMap) {
+    if (selectedColor && currentStockMap) {
         const key = `${talla}_${selectedColor}`;
-        maxCantidadDisponible = stockMap[key] || 0;
+        maxCantidadDisponible = currentStockMap[key] || 0;
     } else {
         maxCantidadDisponible = 0;
     }
@@ -477,15 +482,6 @@ function selectTalla(talla, stockMap, e) {
         document.getElementById('stockNum').innerText = maxCantidadDisponible;
     } else {
         document.getElementById('stockWarning').style.display = 'none';
-    }
-}
-
-function verificarStockCombinacion() {
-    // Esta función se puede llamar cuando cambia el color, para actualizar el stock de la talla seleccionada
-    if (selectedColor && selectedTalla) {
-        // Necesitaríamos el stockMap, que no persiste. 
-        // Solución: volver a consultar o guardar el stockMap en una variable de ámbito superior.
-        // Para simplificar, almacenamos stockMap en window._stockMap o reclicamos.
     }
 }
 
@@ -591,7 +587,7 @@ function renderCart() {
 
     if (footer) {
         footer.style.display = 'block';
-        document.getElementById('cartTotalVal').innerText = `Total: S/ ${total.toFixed(2)}`;
+        document.getElementById('cartTotalVal').innerText = `Total: S/ ${total.tofixed(2)}`;
     }
 }
 
@@ -623,11 +619,42 @@ function sendWhatsApp() {
 }
 
 // ==========================
+// FILTROS Y BÚSQUEDA
+// ==========================
+function applyFilters(searchTerm = '', category = 'todas') {
+    document.querySelectorAll('.product-card').forEach(card => {
+        const texto = card.innerText.toLowerCase();
+        const cat = card.dataset.categoria || '';
+        const coincideBusqueda = texto.includes(searchTerm);
+        const coincideCategoria = category === 'todas' || cat.includes(category);
+        card.style.display = coincideBusqueda && coincideCategoria ? '' : 'none';
+    });
+}
+
+// ==========================
 // INICIALIZACIÓN
 // ==========================
 document.addEventListener('DOMContentLoaded', () => {
     loadProducts();
 
+    // Búsqueda
+    document.getElementById('searchInput')?.addEventListener('input', function(e) {
+        const activeCat = document.querySelector('.cat-pill.active')?.dataset.cat || 'todas';
+        applyFilters(e.target.value.toLowerCase(), activeCat);
+    });
+
+    // Filtros por categoría
+    document.querySelectorAll('.cat-pill').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.cat-pill').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            const cat = this.dataset.cat;
+            const searchTerm = document.getElementById('searchInput')?.value.toLowerCase() || '';
+            applyFilters(searchTerm, cat);
+        });
+    });
+
+    // Listeners admin
     document.querySelectorAll('.talla-check').forEach(cb => cb.addEventListener('change', generateStockFields));
     document.getElementById('prodColores')?.addEventListener('input', generateStockFields);
 
