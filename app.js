@@ -165,14 +165,14 @@ function generateStockFields() {
     
     if (tallas.length > 0 && colores.length > 0) {
         container.style.display = 'block';
-        stockFieldsDiv.innerHTML = '<table style="width:100%; border-collapse:collapse;">';
-        stockFieldsDiv.innerHTML += '<tr><th>Color / Talla</th>' + tallas.map(t => `<th>${t}</th>`).join('') + '</tr>';
+        stockFieldsDiv.innerHTML = '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
+        stockFieldsDiv.innerHTML += '<tr><th style="padding:8px; background:#0a0a0a; color:white;">Color / Talla</th>' + tallas.map(t => `<th style="padding:8px; background:#0a0a0a; color:white;">${t}</th>`).join('') + '</tr>';
         
         colores.forEach(color => {
-            stockFieldsDiv.innerHTML += `<tr><td style="background:#f0f0f0; padding:5px;"><strong>${color}</strong></td>`;
+            stockFieldsDiv.innerHTML += `<tr><td style="background:#f0f0f0; padding:8px;"><strong>${color}</strong></td>`;
             tallas.forEach(talla => {
                 const fieldId = `stock_${talla}_${color.replace(/\s/g, '_')}`;
-                stockFieldsDiv.innerHTML += `<td style="padding:5px;"><input type="number" id="${fieldId}" value="0" min="0" style="width:70px; padding:5px;"></td>`;
+                stockFieldsDiv.innerHTML += `<td style="padding:5px;"><input type="number" id="${fieldId}" value="0" min="0" style="width:70px; padding:5px; text-align:center;"></td>`;
             });
             stockFieldsDiv.innerHTML += '</tr>';
         });
@@ -310,8 +310,32 @@ async function prepareEdit(polo) {
     document.querySelectorAll('.talla-check').forEach(cb => {
         cb.checked = (polo.tallas || []).includes(cb.value);
     });
+    
+    // Generar campos de stock después de cargar tallas y colores
+    setTimeout(() => {
+        generateStockFields();
+        // Cargar stocks existentes si los hay
+        if (polo.id) {
+            loadExistingStocks(polo.id);
+        }
+    }, 100);
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function loadExistingStocks(poloId) {
+    const { data: stocks } = await _supabase
+        .from('polo_stock')
+        .select('*')
+        .eq('polo_id', poloId);
+    
+    if (stocks) {
+        stocks.forEach(stock => {
+            const fieldId = `stock_${stock.talla}_${stock.color.replace(/\s/g, '_')}`;
+            const field = document.getElementById(fieldId);
+            if (field) field.value = stock.cantidad;
+        });
+    }
 }
 
 function resetForm() {
@@ -327,6 +351,8 @@ function resetForm() {
     document.getElementById('fileLabel').innerHTML = "📷 Seleccionar Imagen";
     document.getElementById('cancelEdit').style.display = 'none';
     document.querySelectorAll('.talla-check').forEach(cb => cb.checked = false);
+    document.getElementById('stockFieldsContainer').style.display = 'none';
+    document.getElementById('stockFields').innerHTML = '';
 }
 
 // MODAL PRINCIPAL
@@ -348,7 +374,6 @@ async function openModal(polo) {
     document.getElementById('tallaSeleccionada').innerText = "—";
     document.getElementById('stockWarning').style.display = 'none';
     document.getElementById('cantidadValue').innerText = "1";
-    document.getElementById('cantidadSeleccionada').innerText = "1";
     document.getElementById('maxStock').innerText = polo.stock || 0;
     
     const colorOptions = document.getElementById('colorOptions');
@@ -356,16 +381,17 @@ async function openModal(polo) {
     
     const colores = polo.colores || ['Blanco', 'Negro'];
     colores.forEach(color => {
-        colorOptions.innerHTML += `
-            <div style="text-align:center;">
-                <div class="color-circle" 
-                     style="background-color: ${getColorCode(color)};"
-                     onclick="selectColor('${color}')"
-                     title="${color}">
-                </div>
-                <small style="font-size: 10px; display: block; margin-top: 4px;">${color}</small>
+        const colorDiv = document.createElement('div');
+        colorDiv.style.textAlign = 'center';
+        colorDiv.innerHTML = `
+            <div class="color-circle" 
+                 style="background-color: ${getColorCode(color)};"
+                 onclick="selectColor('${color}')"
+                 title="${color}">
             </div>
+            <small style="font-size: 10px; display: block; margin-top: 4px;">${color}</small>
         `;
+        colorOptions.appendChild(colorDiv);
     });
     
     const tallaOptions = document.getElementById('tallaOptions');
@@ -373,11 +399,11 @@ async function openModal(polo) {
     
     const tallas = polo.tallas || ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
     tallas.forEach(talla => {
-        tallaOptions.innerHTML += `
-            <button class="talla-btn" onclick="selectTalla('${talla}', ${polo.stock || 0})">
-                ${talla} (${polo.stock || 0})
-            </button>
-        `;
+        const btn = document.createElement('button');
+        btn.className = 'talla-btn';
+        btn.innerText = `${talla} (${polo.stock || 0})`;
+        btn.onclick = () => selectTalla(talla, polo.stock || 0);
+        tallaOptions.appendChild(btn);
     });
     
     document.getElementById('modalOverlay').classList.add('open');
@@ -404,7 +430,6 @@ function selectTalla(talla, stock) {
     document.getElementById('tallaSeleccionada').innerText = `${talla} (${stock} disponibles)`;
     document.getElementById('maxStock').innerText = stock;
     document.getElementById('cantidadValue').innerText = "1";
-    document.getElementById('cantidadSeleccionada').innerText = "1";
     
     document.querySelectorAll('.talla-btn').forEach(btn => {
         btn.classList.remove('selected');
@@ -430,7 +455,6 @@ function cambiarCantidad(delta) {
     
     selectedCantidad = nuevaCantidad;
     document.getElementById('cantidadValue').innerText = selectedCantidad;
-    document.getElementById('cantidadSeleccionada').innerText = selectedCantidad;
 }
 
 function addToCartFromModal() {
@@ -476,23 +500,32 @@ function addToCartFromModal() {
     closeModal();
     
     // Mostrar modal de confirmación
-    document.getElementById('confirmMessage').innerHTML = `${selectedCantidad}x ${selectedPolo.nombre}<br><small>${selectedColor} / Talla ${selectedTalla}</small>`;
-    document.getElementById('confirmModalOverlay').classList.add('open');
+    const confirmMsg = document.getElementById('confirmMessage');
+    if (confirmMsg) {
+        confirmMsg.innerHTML = `${selectedCantidad}x ${selectedPolo.nombre}<br><small>${selectedColor} / Talla ${selectedTalla}</small>`;
+    }
+    const confirmModal = document.getElementById('confirmModalOverlay');
+    if (confirmModal) {
+        confirmModal.classList.add('open');
+    }
 }
 
 function closeModal() {
-    document.getElementById('modalOverlay').classList.remove('open');
+    const modal = document.getElementById('modalOverlay');
+    if (modal) modal.classList.remove('open');
     selectedColor = null;
     selectedTalla = null;
     selectedCantidad = 1;
 }
 
 function closeConfirmModalAndContinue() {
-    document.getElementById('confirmModalOverlay').classList.remove('open');
+    const confirmModal = document.getElementById('confirmModalOverlay');
+    if (confirmModal) confirmModal.classList.remove('open');
 }
 
 function goToCartFromConfirm() {
-    document.getElementById('confirmModalOverlay').classList.remove('open');
+    const confirmModal = document.getElementById('confirmModalOverlay');
+    if (confirmModal) confirmModal.classList.remove('open');
     switchTab('cart');
 }
 
@@ -580,7 +613,7 @@ function showToast(msg) {
     setTimeout(() => toast.classList.remove('show'), 3000);
 }
 
-// ESCUCHAR CAMBIOS EN TALLAS Y COLORES
+// INICIALIZAR
 document.addEventListener('DOMContentLoaded', () => {
     loadProducts();
     
@@ -590,7 +623,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (tallaChecks.length > 0) {
         tallaChecks.forEach(cb => cb.addEventListener('change', generateStockFields));
     }
-    if (coloresInput) coloresInput.addEventListener('input', generateStockFields);
+    if (coloresInput) {
+        coloresInput.addEventListener('input', generateStockFields);
+    }
     
     const logo = document.getElementById('secretLogo');
     if (logo) {
