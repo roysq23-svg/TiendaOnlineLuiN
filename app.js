@@ -169,7 +169,7 @@ function generateStockFields() {
         stockFieldsDiv.innerHTML += '<tr><th style="padding:8px; background:#0a0a0a; color:white;">Color / Talla</th>' + tallas.map(t => `<th style="padding:8px; background:#0a0a0a; color:white;">${t}</th>`).join('') + '</tr>';
         
         colores.forEach(color => {
-            stockFieldsDiv.innerHTML += `<tr><td style="background:#f0f0f0; padding:8px;"><strong>${color}</strong></td>`;
+            stockFieldsDiv.innerHTML += `<tr><td style="background:#f0f0f0; padding:8px;"><strong>${color}</strong></tr>`;
             tallas.forEach(talla => {
                 const fieldId = `stock_${talla}_${color.replace(/\s/g, '_')}`;
                 stockFieldsDiv.innerHTML += `<td style="padding:5px;"><input type="number" id="${fieldId}" value="0" min="0" style="width:70px; padding:5px; text-align:center;"></td>`;
@@ -311,13 +311,9 @@ async function prepareEdit(polo) {
         cb.checked = (polo.tallas || []).includes(cb.value);
     });
     
-    // Generar campos de stock después de cargar tallas y colores
     setTimeout(() => {
         generateStockFields();
-        // Cargar stocks existentes si los hay
-        if (polo.id) {
-            loadExistingStocks(polo.id);
-        }
+        loadExistingStocks(polo.id);
     }, 100);
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -499,7 +495,6 @@ function addToCartFromModal() {
     updateCartCount();
     closeModal();
     
-    // Mostrar modal de confirmación
     const confirmMsg = document.getElementById('confirmMessage');
     if (confirmMsg) {
         confirmMsg.innerHTML = `${selectedCantidad}x ${selectedPolo.nombre}<br><small>${selectedColor} / Talla ${selectedTalla}</small>`;
