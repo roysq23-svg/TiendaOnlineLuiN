@@ -26,20 +26,42 @@ async function loadProducts() {
         .select('*')
         .order('id', { ascending: false });
 
-    if (error) { showToast("❌ Error al cargar productos"); return; }
+    if (error) { 
+        console.error("Error al cargar productos:", error);
+        showToast("❌ Error al cargar productos"); 
+        return; 
+    }
 
     const grid = document.getElementById('storeGrid');
+    if (!grid) return;
+    
     grid.innerHTML = '';
+
+    if (!polos || polos.length === 0) {
+        grid.innerHTML = '<p style="text-align:center; grid-column:1/-1;">No hay productos disponibles. Agrega desde el panel Admin.</p>';
+        return;
+    }
 
     polos.forEach(p => {
         grid.innerHTML += `
             <div class="product-card" onclick='openModal(${JSON.stringify(p)})'>
-                <img src="${p.imagen_url}" onerror="this.src='https://via.placeholder.com/300?text=Sin+imagen'">
+                <img src="${p.imagen_url || 'https://via.placeholder.com/300?text=Sin+imagen'}" onerror="this.src='https://via.placeholder.com/300?text=Sin+imagen'">
                 <div class="product-info">
-                    <h3>${p.nombre}</h3>
+                    <h3>${escapeHtml(p.nombre)}</h3>
                     <p>S/ ${parseFloat(p.precio).toFixed(2)}</p>
                 </div>
             </div>`;
+    });
+}
+
+// Función auxiliar para evitar XSS
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
     });
 }
 
@@ -50,19 +72,30 @@ async function loadInventory() {
         .select('*')
         .order('id', { ascending: false });
 
-    if (error) { showToast("❌ Error al cargar inventario"); return; }
+    if (error) { 
+        console.error("Error al cargar inventario:", error);
+        showToast("❌ Error al cargar inventario"); 
+        return; 
+    }
 
     const list = document.getElementById('adminInventoryList');
+    if (!list) return;
+    
     list.innerHTML = '';
+
+    if (!polos || polos.length === 0) {
+        list.innerHTML = '<p>No hay productos registrados.</p>';
+        return;
+    }
 
     polos.forEach(p => {
         list.innerHTML += `
             <div class="inventory-item">
-                <img src="${p.imagen_url}" onerror="this.src='https://via.placeholder.com/50'">
+                <img src="${p.imagen_url || 'https://via.placeholder.com/50'}" onerror="this.src='https://via.placeholder.com/50'">
                 <div style="flex-grow:1; margin-left:15px;">
-                    <h4 style="font-size:14px;">${p.nombre}</h4>
+                    <h4 style="font-size:14px;">${escapeHtml(p.nombre)}</h4>
                     <small>S/ ${parseFloat(p.precio).toFixed(2)}</small><br>
-                    <small style="color:#888;">${p.categoria || 'Sin categoría'}</small>
+                    <small style="color:#888;">${escapeHtml(p.categoria) || 'Sin categoría'}</small>
                 </div>
                 <button onclick='prepareEdit(${JSON.stringify(p)})' style="color:blue; background:none; border:none; cursor:pointer;">Editar</button>
                 <button onclick="deletePolo(${p.id})" style="color:red; background:none; border:none; cursor:pointer; margin-left:10px;">Borrar</button>
@@ -75,15 +108,8 @@ async function saveProduct() {
     const nombre = document.getElementById('prodName').value.trim();
     const precio = document.getElementById('prodPrice').value;
     const descripcion = document.getElementById('prodDesc').value.trim();
-    const categoria = document.getElementById('prodCategoria').value;
+    const categoria = document.getElementById('prodCategoria')?.value || 'Básico';
     const file = document.getElementById('imgFileInput').files[0];
-
-    // Tallas seleccionadas
-    const tallasChecked = [...document.querySelectorAll('.talla-check:checked')].map(cb => cb.value);
-
-    // Colores ingresados
-    const coloresRaw = document.getElementById('prodColores').value.trim();
-    const colores = coloresRaw ? coloresRaw.split(',').map(c => c.trim()).filter(c => c) : [];
 
     if (!nombre || !precio) return showToast("⚠️ Llena nombre y precio");
 
@@ -95,9 +121,7 @@ async function saveProduct() {
         nombre,
         precio: parseFloat(precio),
         descripcion,
-        categoria,
-        tallas: tallasChecked,
-        colores: colores
+        categoria
     };
 
     // Subir imagen si hay archivo
@@ -108,7 +132,7 @@ async function saveProduct() {
             .upload(fileName, file, { upsert: true });
 
         if (uploadError) {
-            showToast("❌ Error al subir imagen");
+            showToast("❌ Error al subir imagen: " + uploadError.message);
             btn.innerText = "GUARDAR CAMBIOS";
             btn.disabled = false;
             return;
@@ -121,7 +145,6 @@ async function saveProduct() {
         updateData.imagen_url = urlData.publicUrl;
     }
 
-    let poloId = id;
     let error;
 
     if (id) {
@@ -130,9 +153,6 @@ async function saveProduct() {
     } else {
         const res = await _supabase.from('polos').insert([updateData]).select();
         error = res.error;
-        if (!error && res.data && res.data.length > 0) {
-            poloId = res.data[0].id;
-        }
     }
 
     if (error) {
@@ -140,22 +160,6 @@ async function saveProduct() {
         btn.innerText = "GUARDAR CAMBIOS";
         btn.disabled = false;
         return;
-    }
-
-    // Guardar stock por talla y color
-    if (poloId && tallasChecked.length > 0 && colores.length > 0) {
-        for (const talla of tallasChecked) {
-            for (const color of colores) {
-                const stockInput = document.getElementById(`stock_${talla}_${color.replace(/\s/g,'_')}`);
-                const cantidad = stockInput ? parseInt(stockInput.value) || 0 : 0;
-                await _supabase.from('polo_stock').upsert({
-                    polo_id: parseInt(poloId),
-                    talla,
-                    color,
-                    cantidad
-                }, { onConflict: 'polo_id,talla,color' });
-            }
-        }
     }
 
     showToast(id ? "✅ Polo actualizado" : "✅ Polo agregado");
@@ -185,15 +189,11 @@ function prepareEdit(polo) {
     document.getElementById('prodName').value = polo.nombre;
     document.getElementById('prodPrice').value = polo.precio;
     document.getElementById('prodDesc').value = polo.descripcion || '';
-    document.getElementById('prodCategoria').value = polo.categoria || 'Básico';
-    document.getElementById('prodColores').value = (polo.colores || []).join(', ');
+    if (document.getElementById('prodCategoria')) {
+        document.getElementById('prodCategoria').value = polo.categoria || 'Básico';
+    }
     document.getElementById('fileLabel').innerHTML = "📷 Seleccionar nueva imagen (opcional)";
     document.getElementById('cancelEdit').style.display = 'block';
-
-    // Marcar tallas
-    document.querySelectorAll('.talla-check').forEach(cb => {
-        cb.checked = (polo.tallas || []).includes(cb.value);
-    });
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -204,21 +204,21 @@ function resetForm() {
     document.getElementById('prodName').value = "";
     document.getElementById('prodPrice').value = "";
     document.getElementById('prodDesc').value = "";
-    document.getElementById('prodCategoria').value = "Básico";
-    document.getElementById('prodColores').value = "";
+    if (document.getElementById('prodCategoria')) {
+        document.getElementById('prodCategoria').value = "Básico";
+    }
     document.getElementById('imgFileInput').value = "";
     document.getElementById('fileLabel').innerHTML = "📷 Seleccionar Imagen";
     document.getElementById('cancelEdit').style.display = 'none';
-    document.querySelectorAll('.talla-check').forEach(cb => cb.checked = false);
 }
 
-// MODAL CON TALLAS Y COLORES
+// MODAL (versión simplificada sin stock por talla/color)
 async function openModal(polo) {
     selectedPolo = polo;
     selectedColor = null;
     selectedTalla = null;
 
-    document.getElementById('modalImg').src = polo.imagen_url;
+    document.getElementById('modalImg').src = polo.imagen_url || 'https://via.placeholder.com/300';
     document.getElementById('modalName').innerText = polo.nombre;
     document.getElementById('modalPrice').innerText = "S/ " + parseFloat(polo.precio).toFixed(2);
     document.getElementById('modalDesc').innerText = polo.descripcion || "Calidad Premium.";
@@ -226,9 +226,116 @@ async function openModal(polo) {
     document.getElementById('colorSeleccionado').innerText = "—";
     document.getElementById('tallaSeleccionada').innerText = "—";
     document.getElementById('stockWarning').style.display = 'none';
-    document.getElementById('tallaOptions').innerHTML = '';
-    document.getElementById('colorOptions').innerHTML = '';
+    
+    document.getElementById('modalOverlay').classList.add('open');
+}
 
-    // Cargar stock desde supabase
-    const { data: stockData } = await _supabase
-        .from('
+function addToCartFromModal() {
+    if (!selectedPolo) return;
+    
+    showToast("✅ Añadido al carrito");
+    closeModal();
+}
+
+function closeModal() {
+    document.getElementById('modalOverlay').classList.remove('open');
+}
+
+function renderCart() {
+    const container = document.getElementById('cartItemsList');
+    const footer = document.getElementById('cartFooter');
+    
+    if (!container) return;
+    
+    if (!cart || cart.length === 0) {
+        container.innerHTML = '<p style="text-align:center;">Tu carrito está vacío</p>';
+        if (footer) footer.style.display = 'none';
+        return;
+    }
+    
+    let total = 0;
+    container.innerHTML = '';
+    
+    cart.forEach((item, index) => {
+        const subtotal = item.precio * item.cantidad;
+        total += subtotal;
+        container.innerHTML += `
+            <div class="cart-item">
+                <span>${item.nombre}</span>
+                <span>S/ ${item.precio.toFixed(2)} x ${item.cantidad}</span>
+                <span>S/ ${subtotal.toFixed(2)}</span>
+                <button onclick="removeFromCart(${index})">❌</button>
+            </div>
+        `;
+    });
+    
+    if (footer) {
+        footer.style.display = 'block';
+        const totalEl = document.getElementById('cartTotalVal');
+        if (totalEl) totalEl.innerText = `Total: S/ ${total.toFixed(2)}`;
+    }
+}
+
+function removeFromCart(index) {
+    cart.splice(index, 1);
+    renderCart();
+    updateCartCount();
+}
+
+function updateCartCount() {
+    const count = cart.reduce((sum, item) => sum + item.cantidad, 0);
+    const cartCountSpan = document.getElementById('cart-count');
+    if (cartCountSpan) cartCountSpan.innerText = count;
+}
+
+function sendWhatsApp() {
+    if (!cart.length) {
+        showToast("Carrito vacío");
+        return;
+    }
+    
+    let mensaje = "🛍️ *NUEVO PEDIDO*%0A";
+    let total = 0;
+    
+    cart.forEach(item => {
+        const subtotal = item.precio * item.cantidad;
+        total += subtotal;
+        mensaje += `%0A• ${item.nombre} x${item.cantidad} = S/ ${subtotal.toFixed(2)}`;
+    });
+    
+    mensaje += `%0A%0A💰 *TOTAL: S/ ${total.toFixed(2)}*`;
+    mensaje += "%0A%0A📦 *POLO STUDIO*";
+    
+    window.open(`https://wa.me/51987654321?text=${mensaje}`, '_blank');
+}
+
+function showToast(msg) {
+    const toast = document.getElementById('toast');
+    if (!toast) return;
+    toast.innerText = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+// INICIALIZAR
+document.addEventListener('DOMContentLoaded', () => {
+    loadProducts();
+    
+    // Mostrar admin con doble clic en logo
+    const logo = document.getElementById('secretLogo');
+    if (logo) {
+        logo.addEventListener('dblclick', () => {
+            const adminBtn = document.getElementById('tab-admin');
+            if (adminBtn) adminBtn.style.display = 'inline-block';
+            showToast("Modo Admin Activado");
+        });
+    }
+    
+    // Cerrar modal al hacer clic fuera
+    const modalOverlay = document.getElementById('modalOverlay');
+    if (modalOverlay) {
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === modalOverlay) closeModal();
+        });
+    }
+});
