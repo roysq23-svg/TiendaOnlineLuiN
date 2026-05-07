@@ -519,12 +519,19 @@ function addToCartFromModal() {
     }
 
     updateCartCount();
-    closeModal();
 
-    document.getElementById('confirmMessage').innerHTML = 
-        `${selectedCantidad}x ${selectedPolo.nombre}<br><small>${selectedColor} / Talla ${selectedTalla}</small>`;
-    document.getElementById('confirmModalOverlay').classList.add('open');
-}
+// Guardar antes del reset
+const confirmedColor = selectedColor;
+const confirmedTalla = selectedTalla;
+const confirmedCantidad = selectedCantidad;
+const confirmedNombre = selectedPolo.nombre;
+
+closeModal();
+
+document.getElementById('confirmMessage').innerHTML = 
+    `${confirmedCantidad}x ${confirmedNombre}<br><small>${confirmedColor} / Talla ${confirmedTalla}</small>`;
+document.getElementById('confirmModalOverlay').classList.add('open');
+   } 
 
 function closeModal() {
     document.getElementById('modalOverlay').classList.remove('open');
@@ -587,7 +594,7 @@ function renderCart() {
 
     if (footer) {
         footer.style.display = 'block';
-        document.getElementById('cartTotalVal').innerText = `Total: S/ ${total.tofixed(2)}`;
+        document.getElementById('cartTotalVal').innerText = `Total: S/ ${total.toFixed(2)}`;
     }
 }
 
