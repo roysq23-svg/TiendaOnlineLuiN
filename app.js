@@ -612,7 +612,7 @@ function updateCartCount() {
 function sendWhatsApp() {
     if (!cart.length) { showToast("Carrito vacío"); return; }
 
-    let mensaje = "🛍️ *NUEVO PEDIDO - POLO STUDIO*%0A%0A";
+    let mensaje = "🛍️ *NUEVO PEDIDO - Jogri*%0A%0A";
     let total = 0;
     cart.forEach(item => {
         const subtotal = item.precio * item.cantidad;
