@@ -622,7 +622,7 @@ function sendWhatsApp() {
     mensaje += `%0A💰 *TOTAL: S/ ${total.toFixed(2)}*`;
     mensaje += "%0A%0A📦 Gracias por tu compra!";
 
-    window.open(`https://wa.me/912334187?text=${mensaje}`, '_blank');
+    window.open(`https://wa.me/940620618?text=${mensaje}`, '_blank');
 }
 
 // ==========================
